@@ -72,10 +72,16 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("DevCors", policy =>
         policy
-            .WithOrigins("http://localhost:4200", "https://tusitio.com")
+            .WithOrigins(
+                "http://localhost:4200",
+                "https://green-water-07b46ba10.3.azurestaticapps.net"
+            )
             .AllowAnyHeader()
-            .AllowAnyMethod());
+            .AllowAnyMethod()
+            .AllowCredentials()
+        );
 });
+
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
