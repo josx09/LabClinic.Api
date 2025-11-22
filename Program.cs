@@ -1,4 +1,4 @@
-﻿using LabClinic.Api.Data;
+using LabClinic.Api.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -6,26 +6,44 @@ using Microsoft.OpenApi.Models;
 using System.Text;
 using QuestPDF.Infrastructure;
 using LabClinic.Api.Common;
-using LabClinic.Api.Services; 
+using LabClinic.Api.Services;
 
 QuestPDF.Settings.License = LicenseType.Community;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// === Conexión a la BD ===
-var conn = builder.Configuration.GetConnectionString("LabConn")
-           ?? "server=localhost;database=dblaboratorio;user=root;password=;";
+// ============================
+// 🔗 CONEXIÓN A LA BASE DE DATOS
+// ============================
+
+var conn = builder.Configuration.GetConnectionString("LabConn");
+
+if (string.IsNullOrWhiteSpace(conn))
+{
+    // Fallback solo para desarrollo local
+    conn = "server=localhost;database=dblaboratorio;user=root;password=;";
+}
+
 builder.Services.AddDbContext<LabDbContext>(opt =>
     opt.UseMySql(conn, ServerVersion.AutoDetect(conn)));
 
-// === Registro de servicio multisucursal ===
+
+// ============================
+// 🏥 MULTISUCURSAL
+// ============================
+
 builder.Services.AddScoped<ISucursalContext, SucursalContext>();
 
-// === Autenticación JWT ===
+
+// ============================
+// 🔐 JWT
+// ============================
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
         options.RequireHttpsMetadata = false;
+
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = false,
@@ -40,10 +58,13 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-// === Autorización (con policies para IA) ===
+
+// ============================
+// 👮 AUTORIZACIÓN
+// ============================
+
 builder.Services.AddAuthorization(options =>
 {
-    // Lectura del asistente (chat, resúmenes JSON)
     options.AddPolicy("IA.Read", policy =>
         policy.RequireAuthenticatedUser()
               .RequireAssertion(ctx =>
@@ -52,22 +73,28 @@ builder.Services.AddAuthorization(options =>
                   || ctx.User.IsInRole("Recepcionista")
                   || ctx.User.HasClaim("perm", "ia.read")));
 
-    // Acciones que ejecutan efectos (enviar correos, jobs, etc.)
     options.AddPolicy("IA.Write", policy =>
         policy.RequireAuthenticatedUser()
               .RequireAssertion(ctx =>
                      ctx.User.IsInRole("Administrador")
                   || ctx.User.HasClaim("perm", "ia.write")));
 
-    // Exclusivo de administrador
     options.AddPolicy("IA.Admin", policy =>
         policy.RequireRole("Administrador"));
 });
 
-// === Servicio de correo SMTP ===
+
+// ============================
+// 📧 CORREO SMTP
+// ============================
+
 builder.Services.AddScoped<IEmailService, EmailService>();
 
-// === CORS: política abierta para desarrollo ===
+
+// ============================
+// 🌍 CORS PARA ANGULAR + AZURE STATIC WEB APPS
+// ============================
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("DevCors", policy =>
@@ -83,17 +110,24 @@ builder.Services.AddCors(options =>
 });
 
 
+// ============================
+// ⚙ CONTROLLERS / JSON
+// ============================
+
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
     });
 
-builder.Services.AddHttpClient(); //  Requerido para IAController
-
+builder.Services.AddHttpClient();
 builder.Services.AddEndpointsApiExplorer();
 
-// === SWAGGER con soporte para JWT ===
+
+// ============================
+// 📘 SWAGGER + JWT
+// ============================
+
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo
@@ -110,7 +144,7 @@ builder.Services.AddSwaggerGen(c =>
         Scheme = "bearer",
         BearerFormat = "JWT",
         In = ParameterLocation.Header,
-        Description = "Introduce tu token JWT en el formato: **Bearer {tu_token}**"
+        Description = "Introduce: Bearer {token}"
     });
 
     c.AddSecurityRequirement(new OpenApiSecurityRequirement
@@ -128,19 +162,25 @@ builder.Services.AddSwaggerGen(c =>
         }
     });
 
-    // Mostrar encabezado de sucursal en Swagger
     c.OperationFilter<AddSucursalHeaderParameter>();
 });
 
+
+// ============================
+// 🚀 BUILD
+// ============================
+
 var app = builder.Build();
 
-// Forzar entorno de desarrollo para ver errores completos
 app.Environment.EnvironmentName = Environments.Development;
 
-// === Middleware de errores detallados ===
 app.UseDeveloperExceptionPage();
 
-// === Swagger ===
+
+// ============================
+// 📘 SWAGGER
+// ============================
+
 if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
 {
     app.UseSwagger();
@@ -153,15 +193,38 @@ if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
 
 app.UseRouting();
 
-// CORS SIEMPRE antes de auth
+
+// ============================
+// 🌍 CORS ANTES DE AUTH
+// ============================
+
 app.UseCors("DevCors");
 
-// Middleware de sucursal DEBE ir antes de la autenticación
+
+// ============================
+// 🏥 MULTISUCURSAL MIDDLEWARE
+// ============================
+
 app.UseMiddleware<SucursalMiddleware>();
+
+
+// ============================
+// 🔐 AUTH
+// ============================
 
 app.UseAuthentication();
 app.UseAuthorization();
 
+
+// ============================
+// 📌 ENDPOINTS
+// ============================
+
 app.MapControllers();
+
+
+// ============================
+// ▶ RUN
+// ============================
 
 app.Run();
