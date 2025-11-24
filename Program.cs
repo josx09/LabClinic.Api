@@ -20,7 +20,6 @@ var conn = builder.Configuration.GetConnectionString("LabConn");
 
 if (string.IsNullOrWhiteSpace(conn))
 {
-    // Fallback solo para desarrollo local
     conn = "server=localhost;database=dblaboratorio;user=root;password=;";
 }
 
@@ -43,16 +42,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
         options.RequireHttpsMetadata = false;
-
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = false,
             ValidateAudience = false,
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(
-                    builder.Configuration["Jwt:Key"] ?? "dev-key-12345678901234567890"
-                )
+                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"] ??
+                                       "dev-key-12345678901234567890")
             ),
             RoleClaimType = System.Security.Claims.ClaimTypes.Role
         };
@@ -106,7 +103,7 @@ builder.Services.AddCors(options =>
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials()
-        );
+    );
 });
 
 
@@ -172,24 +169,32 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
-app.Environment.EnvironmentName = Environments.Development;
-
-app.UseDeveloperExceptionPage();
-
 
 // ============================
-// 📘 SWAGGER
+// 📘 SWAGGER (FUNCIONA EN PROD + DEV)
 // ============================
 
-if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "LabClinic API v1");
-        c.RoutePrefix = "swagger";
-    });
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "LabClinic API v1");
+    c.RoutePrefix = "swagger";
+});
+
+
+// ============================
+// 📍 EXCEPCIONES SOLO EN DEV
+// ============================
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseDeveloperExceptionPage();
 }
+
+
+// ============================
+// 🛣 ROUTING
+// ============================
 
 app.UseRouting();
 
